@@ -1,0 +1,13 @@
+# Virtual environment
+ai-agent/
+
+# Environment variables — never commit your API keys!
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# OS files
+.DS_Store
