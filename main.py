@@ -11,6 +11,7 @@ Usage:
 
 import sys
 from agent import run_agent
+from guardrails import is_input_clean
 
 
 def main():
@@ -36,6 +37,12 @@ def main():
             lines.append(line)
         code = "\n".join(lines)
         user_input = f"Please review this code:\n\n```python\n{code}\n```"
+
+    # ── Input guardrail ───────────────────────────────────────────────────────
+    clean, reason = is_input_clean(user_input)
+    if not clean:
+        print(f"\n⚠️  {reason}")
+        return
 
     print("\nAgent is thinking...\n")
     review = run_agent(user_input)

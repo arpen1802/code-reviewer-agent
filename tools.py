@@ -4,10 +4,15 @@ tools.py — The actual functions our agent can call.
 Remember: the LLM never runs these directly.
 It just says "I want to call this tool with these args."
 The agent loop in agent.py is what actually executes them.
+
+Day 2: guardrails are now checked inside run_python_code before
+any execution happens. The LLM never even sees the subprocess
+if the code is flagged as dangerous.
 """
 
 import subprocess
 import sys
+from guardrails import is_code_safe
 
 
 def run_python_code(code: str) -> str:
@@ -19,7 +24,14 @@ def run_python_code(code: str) -> str:
     - Crashes don't kill our main program
     - We can enforce a timeout
     - Output is cleanly captured as a string
+
+    Guardrail: dangerous code patterns are blocked before execution.
     """
+    # ── Guardrail check ───────────────────────────────────────────────────────
+    safe, reason = is_code_safe(code)
+    if not safe:
+        return reason  # returned to the LLM so it can explain to the user
+
     try:
         result = subprocess.run(
             [sys.executable, "-c", code],
