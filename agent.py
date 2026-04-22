@@ -4,6 +4,7 @@ agent.py — The core agent loop.
 This is the heart of the project. It wires together:
   - The Gemini LLM (the "brain" that decides what to do)
   - The tools in tools.py (the "hands" that actually do things)
+  - The memory tools in memory.py (long-term knowledge across sessions)
   - The loop that keeps going until the LLM is done
 
 Flow for each review:
@@ -12,6 +13,10 @@ Flow for each review:
   3. Gemini replies with either:
        a. A tool call  → we execute it, send the result back, loop again
        b. Plain text   → that's the final review, we're done
+
+Day 2 additions:
+  - load_memory and save_memory tools
+  - Updated system prompt that instructs the agent to use memory
 """
 
 import os
@@ -19,25 +24,37 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 from tools import TOOL_REGISTRY, run_python_code, read_file
+from memory import load_memory, save_memory
 
 load_dotenv()
 
+# Register memory tools so the agent loop can call them by name
+TOOL_REGISTRY["load_memory"] = load_memory
+TOOL_REGISTRY["save_memory"] = save_memory
+
 # ── System prompt ────────────────────────────────────────────────────────────
-# This tells the LLM what role it plays and how to behave.
-# Later (Day 2) we will move this into a more structured config.
+# Updated for Day 2: the agent now has memory.
+# Notice how we simply describe the expected behavior in plain English —
+# the LLM figures out when and how to call each tool.
 
-SYSTEM_PROMPT = """You are an expert Python code reviewer.
+SYSTEM_PROMPT = """You are an expert Python code reviewer with memory across sessions.
 
-When given code to review, you should:
-1. First use the run_python_code tool to actually execute the code and observe its real output.
-2. If the user gives a file path instead of code, use read_file to get the code first.
-3. After running it, provide a structured review covering:
+At the start of every review:
+1. Call load_memory to recall past reviews and user preferences.
+2. If the user gives a file path, call read_file to get the code.
+3. Call run_python_code to execute the code and observe its real output.
+4. Provide a structured review covering:
    - What the code does
    - Bugs or errors found (with line numbers if possible)
    - Code quality issues (naming, structure, readability)
    - Specific, actionable suggestions for improvement
+   - If you've seen this file before, note what has changed or improved.
 
-Be concise but thorough. Use examples in your suggestions where helpful.
+At the end of every review:
+5. Call save_memory with the filename, a list of the key issues found,
+   and any observations about the user's coding style worth remembering.
+
+Be concise but thorough. Personalize your feedback using past context when available.
 """
 
 
@@ -59,13 +76,9 @@ def run_agent(user_input: str) -> str:
 
     client = genai.Client(api_key=api_key)
 
-    # We pass the actual Python functions as tools.
-    # The new SDK reads their names and docstrings automatically.
-    # We disable automatic_function_calling so we control the loop ourselves —
-    # this makes the agent loop visible and educational.
     config = types.GenerateContentConfig(
         system_instruction=SYSTEM_PROMPT,
-        tools=[run_python_code, read_file],
+        tools=[run_python_code, read_file, load_memory, save_memory],
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
     )
 
@@ -75,10 +88,7 @@ def run_agent(user_input: str) -> str:
     response = chat.send_message(user_input)
 
     # ── The loop ──────────────────────────────────────────────────────────────
-    # This is the core of what makes it an "agent" rather than a one-shot call.
-    # We keep going as long as the LLM wants to call tools.
-
-    max_iterations = 10  # safety cap to prevent infinite loops
+    max_iterations = 15  # bumped up slightly — memory calls add extra turns
 
     for _ in range(max_iterations):
 
@@ -86,7 +96,7 @@ def run_agent(user_input: str) -> str:
         if not response.function_calls:
             return response.text
 
-        # Otherwise, execute every tool call the LLM requested
+        # Execute every tool call the LLM requested
         tool_results = []
         for fc in response.function_calls:
             tool_name = fc.name
@@ -94,7 +104,10 @@ def run_agent(user_input: str) -> str:
 
             print(f"\n  → Agent calling: {tool_name}({tool_args})")
             result = TOOL_REGISTRY[tool_name](**tool_args)
-            print(f"  ← Result: {result[:120]}{'...' if len(result) > 120 else ''}")
+
+            # Memory results can be long — truncate display only, not the actual result
+            display = str(result)
+            print(f"  ← Result: {display[:120]}{'...' if len(display) > 120 else ''}")
 
             tool_results.append(
                 types.Part.from_function_response(
