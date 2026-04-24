@@ -127,6 +127,30 @@ If you pass `--image screenshot.png`, the orchestrator first sends the image to 
 - Memory isolation: eval resets `memory.json` between tasks to prevent contamination
 - CLI flags: `--no-llm-judge` for fast runs, `--task` for single task debug, `--verbose` for full output
 
+### ✅ Vector Database Memory
+
+Upgraded `memory.py` from a flat JSON file to a **ChromaDB vector database** with semantic search.
+
+Instead of "give me the last 5 reviews," the agent now asks "give me the reviews most similar to *this specific code*."
+This is the RAG (Retrieval-Augmented Generation) pattern.
+
+**How it works:**
+
+1. `save_memory` embeds the reviewed code + issues into a 768-dim float vector (via Gemini `text-embedding-004`) and stores it in ChromaDB.
+2. `load_memory(query=<current code>)` embeds the current code, then finds the top-3 most similar past reviews using cosine similarity.
+3. Only relevant context enters the prompt — no token bloat as history grows.
+
+**Local fallback:** In environments without Gemini API access, a bag-of-words local embedder activates automatically. In production (on your own machine), the Gemini path is used.
+
+```
+JSON file memory (Day 2):          Vector DB memory (Day 5):
+load last 5 reviews                embed current code
+      ↓                                    ↓
+all 5 go into prompt               semantic search → top 3 matches
+                                          ↓
+                             only relevant reviews go into prompt
+```
+
 ### 🔜 Production Engineering
 
 ---
@@ -134,6 +158,7 @@ If you pass `--image screenshot.png`, the orchestrator first sends the image to 
 ## Tech Stack
 
 - **LLM**: Gemini 2.5 Flash via [Google GenAI SDK](https://github.com/google-gemini/generative-ai-python)
+- **Embeddings**: Gemini `text-embedding-004` (768-dim) with local bag-of-words fallback
+- **Vector DB**: ChromaDB (persistent, cosine similarity, stored in `~/.code_reviewer_db/`)
 - **Language**: Python 3.10+
 - **Concurrency**: `concurrent.futures.ThreadPoolExecutor` for parallel agents
-- **Memory**: JSON file (to be upgraded to a database in the production phase)

@@ -25,14 +25,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agent import run_agent
 import tools as tools_module
-
-MEMORY_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "memory.json")
+from memory import clear_memory
 
 
 def reset_memory():
-    """Delete memory.json so each eval task starts with a clean slate."""
-    if os.path.exists(MEMORY_FILE):
-        os.remove(MEMORY_FILE)
+    """Wipe the vector DB collection so each eval task starts with a clean slate."""
+    clear_memory()
 
 
 @dataclass
