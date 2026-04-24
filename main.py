@@ -5,28 +5,42 @@ Usage:
     # Review a file:
     python main.py sample_code.py
 
-    # Or paste code directly (interactive mode):
+    # Review a code screenshot (multimodality):
+    python main.py --image screenshot.png
+
+    # Paste code directly (interactive mode):
     python main.py
 """
 
 import sys
-from agent import run_agent
+from agents.orchestrator import run_orchestrator
 from guardrails import is_input_clean
 
 
 def main():
     print("=" * 60)
-    print("         AI Code Reviewer — Day 1")
+    print("         AI Code Reviewer — Multi-Agent")
     print("=" * 60)
 
-    # If a file path was passed as an argument, use that
-    if len(sys.argv) > 1:
-        filepath = sys.argv[1]
-        print(f"\nReviewing file: {filepath}\n")
-        user_input = f"Please review the code in this file: {filepath}"
+    image_path = None
+    user_input = None
 
-    # Otherwise, ask the user to paste code
+    # ── Parse arguments ───────────────────────────────────────────────────────
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "--image" and len(sys.argv) > 2:
+            # Multimodal mode: review a screenshot
+            image_path = sys.argv[2]
+            print(f"\nReviewing image: {image_path}")
+            user_input = "Please review the Python code in the provided screenshot."
+
+        else:
+            # File path mode
+            filepath = sys.argv[1]
+            print(f"\nReviewing file: {filepath}\n")
+            user_input = f"Please review the code in this file: {filepath}"
+
     else:
+        # Interactive paste mode
         print("\nPaste your Python code below.")
         print("When done, type 'END' on a new line and press Enter.\n")
         lines = []
@@ -44,13 +58,11 @@ def main():
         print(f"\n⚠️  {reason}")
         return
 
-    print("\nAgent is thinking...\n")
-    review = run_agent(user_input)
+    # ── Run the multi-agent orchestrator ──────────────────────────────────────
+    print("\nOrchestrating multi-agent review...\n")
+    review = run_orchestrator(user_input, image_path=image_path)
 
-    print("\n" + "=" * 60)
-    print("REVIEW")
-    print("=" * 60)
-    print(review)
+    print("\n" + review)
 
 
 if __name__ == "__main__":

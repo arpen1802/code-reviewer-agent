@@ -8,7 +8,12 @@ A Python agent that reviews code by actually executing it, remembering past sess
 
 ```
 code-reviewer-agent/
-├── agent.py          # Core agent loop (LLM + tool orchestration)
+├── agents/
+│   ├── orchestrator.py       # Multi-agent coordinator + multimodality
+│   ├── reviewer_agent.py     # Code quality specialist
+│   ├── security_agent.py     # Security vulnerability specialist
+│   └── test_writer_agent.py  # Test generation specialist
+├── agent.py          # Original single agent loop (kept for reference)
 ├── tools.py          # Tool implementations (run_python_code, read_file)
 ├── memory.py         # Long-term memory (load/save across sessions)
 ├── guardrails.py     # Safety checks (content filter + action limiter)
@@ -47,8 +52,11 @@ cp .env.example .env
 ## Usage
 
 ```bash
-# Review a file
+# Review a Python file
 python main.py sample_code.py
+
+# Review a screenshot of code (multimodality)
+python main.py --image screenshot.png
 
 # Paste code interactively
 python main.py
@@ -58,22 +66,28 @@ python main.py
 
 ## How It Works
 
-The agent follows a loop:
+### Multi-Agent Architecture
 
 ```
-User submits code / file path
+User Input (code, file path, or screenshot)
         ↓
 [Guardrail] Input checked for injection attempts
         ↓
-LLM loads memory → reads file → runs code → writes review → saves memory
+Orchestrator Agent
+  ├── [parallel] Reviewer Agent    → code quality, bugs, readability
+  ├── [parallel] Security Agent    → vulnerabilities, severity ratings
+  └── [parallel] Test Writer Agent → pytest test cases
         ↓
-Each tool call: LLM decides → runtime executes → result sent back to LLM
+Orchestrator merges all three reports → Final Review
         ↓
-Loop ends when LLM produces plain text (the final review)
+Memory saved for next session
 ```
 
-The LLM is the **brain** — it decides which tools to call and in what order.  
-The Python runtime is the **hands** — it actually executes everything.
+The three specialist agents run **in parallel** using Python threads, so the full review takes roughly the same time as a single agent call.
+
+### Multimodality
+
+If you pass `--image screenshot.png`, the orchestrator first sends the image to Gemini's vision model to extract the Python code, then routes the extracted code through the normal review pipeline. You can review code from screenshots, not just text files.
 
 ---
 
@@ -94,7 +108,12 @@ The Python runtime is the **hands** — it actually executes everything.
   - Layer 1 (content filter): blocks prompt injection in user input before any API call
   - Layer 2 (action limiter): blocks dangerous code patterns before subprocess execution
 
-### 🔜 AI Agent Workflows, Multi-Agent Systems, Multimodality
+### ✅ Multi-Agent Systems + Multimodality
+- Orchestrator pattern: one coordinator delegates to three specialist sub-agents
+- Parallel execution: all three agents run simultaneously via `ThreadPoolExecutor`
+- Specialist agents: Reviewer (quality), Security (vulnerabilities), Test Writer (pytest generation)
+- Multimodality: accepts code screenshots via Gemini's vision API (`--image` flag)
+
 ### 🔜 Agent Evaluation
 ### 🔜 Production Engineering
 
@@ -104,4 +123,5 @@ The Python runtime is the **hands** — it actually executes everything.
 
 - **LLM**: Gemini 2.5 Flash via [Google GenAI SDK](https://github.com/google-gemini/generative-ai-python)
 - **Language**: Python 3.10+
-- **Memory**: JSON file (to be upgraded to a database in Day 5)
+- **Concurrency**: `concurrent.futures.ThreadPoolExecutor` for parallel agents
+- **Memory**: JSON file (to be upgraded to a database in the production phase)

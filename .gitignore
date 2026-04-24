@@ -4,6 +4,9 @@ ai-agent/
 # Environment variables — never commit your API keys!
 .env
 
+# Runtime memory — auto-generated, not source code
+memory.json
+
 # Python cache
 __pycache__/
 *.pyc
