@@ -94,7 +94,13 @@ def run_agent(user_input: str) -> str:
 
         # If no function calls, the LLM is done → return the final review
         if not response.function_calls:
-            return response.text
+            if response.text:
+                return response.text
+            # Gemini finished tool calls but wrote no review — nudge it
+            followup = chat.send_message(
+                "Now write your complete structured review for the user based on everything you found."
+            )
+            return followup.text or "(Agent completed but returned no text.)"
 
         # Execute every tool call the LLM requested
         tool_results = []

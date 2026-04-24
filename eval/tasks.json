@@ -1,0 +1,42 @@
+[
+  {
+    "id": "task_001",
+    "description": "Division by zero on empty list",
+    "tags": ["difficulty:easy", "category:bug"],
+    "input": "def average(numbers):\n    total = sum(numbers)\n    return total / len(numbers)\n\nprint(average([]))",
+    "expected_findings": ["division by zero", "empty", "ZeroDivisionError"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_002",
+    "description": "Dangerous eval() usage — security issue",
+    "tags": ["difficulty:easy", "category:security"],
+    "input": "def calculate(expression):\n    # TODO: implement safe expression evaluation\n    return eval(expression)",
+    "expected_findings": ["eval", "security", "injection", "dangerous"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_003",
+    "description": "Clean code — agent should NOT hallucinate bugs",
+    "tags": ["difficulty:medium", "category:no_bugs"],
+    "input": "def factorial(n: int) -> int:\n    if n < 0:\n        raise ValueError('n must be non-negative')\n    if n == 0:\n        return 1\n    return n * factorial(n - 1)\n\nprint(factorial(5))",
+    "expected_findings": [],
+    "should_not_find": ["incorrect", "crash", "wrong", "broken"]
+  },
+  {
+    "id": "task_004",
+    "description": "O(n^2) performance issue — nested loop comparing element to itself",
+    "tags": ["difficulty:medium", "category:performance"],
+    "input": "def find_duplicates(items):\n    duplicates = []\n    for i in range(len(items)):\n        for j in range(len(items)):\n            if items[i] == items[j] and i != j:\n                if items[i] not in duplicates:\n                    duplicates.append(items[i])\n    return duplicates\n\nprint(find_duplicates([1, 2, 3, 2, 4, 3]))",
+    "expected_findings": ["O(n", "performance", "quadratic", "nested loop", "inefficient"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_005",
+    "description": "Unclosed file handle",
+    "tags": ["difficulty:easy", "category:bug"],
+    "input": "def read_config(path):\n    f = open(path, 'r')\n    data = f.read()\n    return data\n\nprint(read_config('config.txt'))",
+    "expected_findings": ["file", "close", "context manager", "with", "leak"],
+    "should_not_find": []
+  }
+]

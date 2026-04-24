@@ -13,7 +13,12 @@ code-reviewer-agent/
 │   ├── reviewer_agent.py     # Code quality specialist
 │   ├── security_agent.py     # Security vulnerability specialist
 │   └── test_writer_agent.py  # Test generation specialist
-├── agent.py          # Original single agent loop (kept for reference)
+├── eval/
+│   ├── tasks.json            # Task suite: 5 test cases with expected findings
+│   ├── graders.py            # Code-based grader + LLM-as-judge grader
+│   ├── harness.py            # Runner: executes tasks, captures trajectories
+│   └── run_eval.py           # Entry point: runs suite, prints results
+├── agent.py          # Core single agent loop (also used by eval)
 ├── tools.py          # Tool implementations (run_python_code, read_file)
 ├── memory.py         # Long-term memory (load/save across sessions)
 ├── guardrails.py     # Safety checks (content filter + action limiter)
@@ -114,7 +119,14 @@ If you pass `--image screenshot.png`, the orchestrator first sends the image to 
 - Specialist agents: Reviewer (quality), Security (vulnerabilities), Test Writer (pytest generation)
 - Multimodality: accepts code screenshots via Gemini's vision API (`--image` flag)
 
-### 🔜 Agent Evaluation
+### ✅ Agent Evaluation
+- 4-component eval pipeline: Task Suite → Infrastructure → Criteria → Grading
+- Task suite (`eval/tasks.json`): 5 test cases covering bugs, security, performance, clean code, and edge cases
+- Two graders: code-based keyword checker (fast, free) + LLM-as-judge (quality scoring 1–5)
+- Trajectory capture: harness records every tool call made during each review
+- Memory isolation: eval resets `memory.json` between tasks to prevent contamination
+- CLI flags: `--no-llm-judge` for fast runs, `--task` for single task debug, `--verbose` for full output
+
 ### 🔜 Production Engineering
 
 ---
