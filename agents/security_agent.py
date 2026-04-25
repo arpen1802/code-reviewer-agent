@@ -61,7 +61,12 @@ def run_security_agent(user_input: str) -> str:
 
     for _ in range(10):
         if not response.function_calls:
-            return response.text
+            if response.text:
+                return response.text
+            followup = chat.send_message(
+                "Now write your complete security analysis with severity ratings based on everything you found."
+            )
+            return followup.text or "(Security agent returned no output.)"
 
         tool_results = []
         for fc in response.function_calls:

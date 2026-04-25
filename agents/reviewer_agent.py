@@ -58,7 +58,13 @@ def run_reviewer_agent(user_input: str) -> str:
 
     for _ in range(10):
         if not response.function_calls:
-            return response.text
+            if response.text:
+                return response.text
+            # Gemini finished tool calls but wrote no review — nudge it
+            followup = chat.send_message(
+                "Now write your complete structured code quality review based on everything you found."
+            )
+            return followup.text or "(Reviewer agent returned no output.)"
 
         tool_results = []
         for fc in response.function_calls:

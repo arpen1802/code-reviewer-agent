@@ -34,10 +34,18 @@ def main():
             user_input = "Please review the Python code in the provided screenshot."
 
         else:
-            # File path mode
+            # File path mode — read the file upfront so the orchestrator has
+            # the actual code for memory embedding (semantic search needs the code,
+            # not just the filename)
             filepath = sys.argv[1]
             print(f"\nReviewing file: {filepath}\n")
-            user_input = f"Please review the code in this file: {filepath}"
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    code = f.read()
+                user_input = f"Please review this code from file '{filepath}':\n\n```python\n{code}\n```"
+            except FileNotFoundError:
+                print(f"Error: File '{filepath}' not found.")
+                return
 
     else:
         # Interactive paste mode

@@ -93,8 +93,14 @@ def run_orchestrator(user_input: str, image_path: str | None = None) -> str:
         user_input = f"Extracted from screenshot:\n```python\n{extracted_code}\n```\n\n{user_input}"
 
     # ── Step 1: Load memory ───────────────────────────────────────────────────
+    # Pass the current code as the query so ChromaDB does semantic search:
+    # "find past reviews whose code is most similar to what we're reviewing now"
     print("\n  [orchestrator] Loading memory...")
-    memory_context = load_memory()
+    memory_context = load_memory(query=user_input[:2000])
+    # Show what was retrieved so the user can see semantic search in action
+    non_empty = [l for l in memory_context.splitlines() if l.strip()]
+    first_line = non_empty[0] if non_empty else "none"
+    print(f"  [orchestrator] Memory: {first_line}")
     full_input = f"Memory context:\n{memory_context}\n\n---\n\n{user_input}"
 
     # ── Step 2: Run all three agents in parallel ──────────────────────────────
@@ -120,13 +126,18 @@ def run_orchestrator(user_input: str, image_path: str | None = None) -> str:
     merged = _merge_reports(review_report, security_report, test_report)
 
     # ── Step 4: Save memory ───────────────────────────────────────────────────
-    # Extract a rough filename from user_input for memory logging
+    # Pass code_snippet so the embedding captures the actual code —
+    # this is what makes future semantic searches find similar bugs/patterns.
     filename = _extract_filename(user_input)
     issues_summary = [
         f"Quality: {_first_line(review_report)}",
         f"Security: {_first_line(security_report)}",
     ]
-    save_memory(file_reviewed=filename, issues_found=issues_summary)
+    save_memory(
+        file_reviewed=filename,
+        issues_found=issues_summary,
+        code_snippet=user_input[:2000],  # embed the actual code, not just metadata
+    )
     print("  [orchestrator] Memory saved.")
 
     return merged
@@ -134,6 +145,9 @@ def run_orchestrator(user_input: str, image_path: str | None = None) -> str:
 
 def _merge_reports(review: str, security: str, tests: str) -> str:
     """Combines the three specialist reports into one readable final review."""
+    review   = (review   or "(Reviewer agent returned no output.)").strip()
+    security = (security or "(Security agent returned no output.)").strip()
+    tests    = (tests    or "(Test writer agent returned no output.)").strip()
     return f"""
 {'=' * 60}
  MULTI-AGENT CODE REVIEW
@@ -141,15 +155,15 @@ def _merge_reports(review: str, security: str, tests: str) -> str:
 
 ━━━ CODE QUALITY (Reviewer Agent) ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-{review.strip()}
+{review}
 
 ━━━ SECURITY ANALYSIS (Security Agent) ━━━━━━━━━━━━━━━━━━━━━
 
-{security.strip()}
+{security}
 
 ━━━ SUGGESTED TESTS (Test Writer Agent) ━━━━━━━━━━━━━━━━━━━━
 
-{tests.strip()}
+{tests}
 
 {'=' * 60}
 """.strip()
