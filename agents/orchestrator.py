@@ -13,9 +13,14 @@ by name, gets their output as a string, and builds on it.
 This file also adds multimodality: the orchestrator can accept an
 image (e.g. a screenshot of code) in addition to text, using Gemini's
 vision capability to extract code from the image before delegating.
+
+Observability (Lecture 5): every key step is logged as a structured
+JSON event via logger.py — session start/end, agent dispatch, memory
+load/save. This fixes the "Black Box" problem from the 7 prototype problems.
 """
 
 import os
+import time
 import concurrent.futures
 from google import genai
 from google.genai import types
@@ -24,6 +29,7 @@ from memory import load_memory, save_memory
 from agents.reviewer_agent import run_reviewer_agent
 from agents.security_agent import run_security_agent
 from agents.test_writer_agent import run_test_writer_agent
+from logger import get_logger
 
 load_dotenv()
 
@@ -83,6 +89,8 @@ def run_orchestrator(user_input: str, image_path: str | None = None) -> str:
     Returns:
         A merged final review from all three specialist agents.
     """
+    log = get_logger()
+    session_start_time = time.time()
 
     # ── Step 0: Multimodality — extract code from image if provided ───────────
     if image_path:
@@ -92,15 +100,30 @@ def run_orchestrator(user_input: str, image_path: str | None = None) -> str:
         # Prepend extracted code to the user's input
         user_input = f"Extracted from screenshot:\n```python\n{extracted_code}\n```\n\n{user_input}"
 
+    # ── Log: session start ────────────────────────────────────────────────────
+    log.session_start(input_summary=user_input[:200])
+
     # ── Step 1: Load memory ───────────────────────────────────────────────────
     # Pass the current code as the query so ChromaDB does semantic search:
     # "find past reviews whose code is most similar to what we're reviewing now"
     print("\n  [orchestrator] Loading memory...")
+    mem_start = time.time()
     memory_context = load_memory(query=user_input[:2000])
+    mem_latency = (time.time() - mem_start) * 1000
+
     # Show what was retrieved so the user can see semantic search in action
     non_empty = [l for l in memory_context.splitlines() if l.strip()]
     first_line = non_empty[0] if non_empty else "none"
     print(f"  [orchestrator] Memory: {first_line}")
+
+    # Count how many past reviews were returned — each one produces a "  File:" line
+    results_found = memory_context.count("\n  File:")
+    log.memory_load(
+        query_chars=len(user_input[:2000]),
+        results_found=results_found,
+        latency_ms=mem_latency,
+    )
+
     full_input = f"Memory context:\n{memory_context}\n\n---\n\n{user_input}"
 
     # ── Step 2: Run all three agents in parallel ──────────────────────────────
@@ -108,15 +131,33 @@ def run_orchestrator(user_input: str, image_path: str | None = None) -> str:
     # Each agent runs independently and returns its report.
     print("\n  [orchestrator] Dispatching to specialist agents in parallel...\n")
 
+    def run_with_logging(agent_name: str, fn, input_text: str):
+        """Wrap an agent call with start/done log events."""
+        log.agent_start(agent_name)
+        start = time.time()
+        try:
+            result = fn(input_text)
+            latency = (time.time() - start) * 1000
+            log.agent_done(
+                agent=agent_name,
+                latency_ms=latency,
+                output_chars=len(result) if result else 0,
+            )
+            return result
+        except Exception as exc:
+            latency = (time.time() - start) * 1000
+            log.agent_done(agent=agent_name, latency_ms=latency, error=str(exc))
+            raise
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        future_review = executor.submit(run_reviewer_agent, full_input)
-        future_security = executor.submit(run_security_agent, full_input)
-        future_tests = executor.submit(run_test_writer_agent, full_input)
+        future_review   = executor.submit(run_with_logging, "reviewer",    run_reviewer_agent,    full_input)
+        future_security = executor.submit(run_with_logging, "security",    run_security_agent,    full_input)
+        future_tests    = executor.submit(run_with_logging, "test_writer", run_test_writer_agent, full_input)
 
         print("  Waiting for all agents to finish...")
-        review_report = future_review.result()
+        review_report   = future_review.result()
         security_report = future_security.result()
-        test_report = future_tests.result()
+        test_report     = future_tests.result()
 
     print("\n  [orchestrator] All agents done. Merging reports...")
 
@@ -133,14 +174,28 @@ def run_orchestrator(user_input: str, image_path: str | None = None) -> str:
         f"Quality: {_first_line(review_report)}",
         f"Security: {_first_line(security_report)}",
     ]
+
+    save_start = time.time()
     save_memory(
         file_reviewed=filename,
         issues_found=issues_summary,
         code_snippet=user_input[:2000],  # embed the actual code, not just metadata
     )
+    save_latency = (time.time() - save_start) * 1000
+    log.memory_save(file_reviewed=filename, latency_ms=save_latency)
     print("  [orchestrator] Memory saved.")
 
+    # ── Log: session end ──────────────────────────────────────────────────────
+    total_latency = (time.time() - session_start_time) * 1000
+    log.session_end(total_latency_ms=total_latency)
+    print(f"  [orchestrator] Total latency: {total_latency / 1000:.1f}s  (logged to {_log_path()})")
+
     return merged
+
+
+def _log_path() -> str:
+    from pathlib import Path
+    return str(Path.home() / ".code_reviewer_db" / "runs.jsonl")
 
 
 def _merge_reports(review: str, security: str, tests: str) -> str:

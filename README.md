@@ -151,7 +151,31 @@ all 5 go into prompt               semantic search → top 3 matches
                              only relevant reviews go into prompt
 ```
 
-### 🔜 Production Engineering
+### ✅ Production Engineering: Structured Observability
+
+Every agent action emits a JSON event to `~/.code_reviewer_db/runs.jsonl` via [`logger.py`](./logger.py).
+
+- **Trace hierarchy** — `session_start` → (`memory_load`, `agent_start`, `tool_call`, `agent_done`) × N → `session_end`. Each event carries `session_id`, `trace_id`, `ts`, and per-event fields (latency_ms, output_chars, error).
+- **Per-tool-call timing** — every `run_python_code`/`read_file`/`save_memory` call inside each specialist agent is wrapped with `time.time()` and logged with its latency.
+- **Parallel-agent fan-out** — the orchestrator logs each specialist's start/end independently, so you can see if one agent is consistently the slow path.
+- **CLI dashboard** — [`log_viewer.py`](./log_viewer.py) pretty-prints the JSONL with per-agent latency breakdown, tool-call timing, and an estimated cost per trace. `python log_viewer.py` shows all traces, `--last 1` only the most recent, `--tail` is live like `tail -f`.
+
+This implements the "Layer 0: Infrastructure" idea from the production engineering lecture — structured logs you can grep, tail, or pull into pandas in one line.
+
+---
+
+## Roadmap
+
+### Next: replace the homegrown logger with Langfuse
+
+`logger.py` and the per-agent timing wrappers emit the same shape of data Langfuse captures automatically via its LangChain `CallbackHandler` — per-call latency, prompt/response text, trace hierarchy, token usage. Migrating gets us:
+
+- A real trace UI (Sessions view, per-call drill-down) instead of grepping JSONL.
+- **Actual** Gemini token counts via `response.usage_metadata`, instead of the current 4-chars-per-token approximation in `log_viewer.py`.
+- Consistency with the observability stack already in use in [scalable-take-home](https://github.com/arpen1802/scalable-take-home) (`src/app/observability.py`).
+- ~180 lines of `logger.py` deleted.
+
+`log_viewer.py` stays as a no-account-needed fallback, but reads from a project-local `./logs/runs.jsonl` rather than the current home-dir hidden path.
 
 ---
 

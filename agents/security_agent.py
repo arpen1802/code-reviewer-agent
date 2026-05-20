@@ -6,13 +6,18 @@ It doesn't care about code style or test coverage — just threats.
 
 It does NOT execute code (running unknown code for security review
 would be counterproductive and dangerous). It reads and analyzes only.
+
+Observability: every tool call is timed and logged as a structured
+JSON event so we can see exactly where time is spent inside this agent.
 """
 
 import os
+import time
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 from tools import read_file, TOOL_REGISTRY
+from logger import get_logger
 
 load_dotenv()
 
@@ -47,6 +52,7 @@ def run_security_agent(user_input: str) -> str:
     Returns:
         A security-focused review with severity ratings.
     """
+    log = get_logger()
     api_key = os.getenv("GEMINI_API_KEY")
     client = genai.Client(api_key=api_key)
 
@@ -73,7 +79,30 @@ def run_security_agent(user_input: str) -> str:
             tool_name = fc.name
             tool_args = dict(fc.args)
             print(f"    [security] → {tool_name}({tool_args})")
-            result = TOOL_REGISTRY[tool_name](**tool_args)
+
+            # ── Log + time the tool call ──────────────────────────────────────
+            t_start = time.time()
+            try:
+                result = TOOL_REGISTRY[tool_name](**tool_args)
+                t_ms = (time.time() - t_start) * 1000
+                log.tool_call(
+                    agent="security",
+                    tool_name=tool_name,
+                    tool_args=tool_args,
+                    latency_ms=t_ms,
+                    result_len=len(str(result)) if result else 0,
+                )
+            except Exception as exc:
+                t_ms = (time.time() - t_start) * 1000
+                log.tool_call(
+                    agent="security",
+                    tool_name=tool_name,
+                    tool_args=tool_args,
+                    latency_ms=t_ms,
+                    error=str(exc),
+                )
+                raise
+
             tool_results.append(
                 types.Part.from_function_response(
                     name=tool_name,
