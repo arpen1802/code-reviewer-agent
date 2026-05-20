@@ -1,0 +1,633 @@
+{
+  "timestamp": "2026-05-20T22:26:34.542040+00:00",
+  "git_sha": "270febc",
+  "prompt_version": "v1",
+  "use_llm_judge": false,
+  "task_count": 30,
+  "totals": {
+    "code": {
+      "passed": 0,
+      "total": 30,
+      "pct": 0.0
+    },
+    "llm": null
+  },
+  "by_category": {
+    "bug": {
+      "code": {
+        "passed": 0,
+        "total": 11,
+        "pct": 0.0
+      },
+      "llm": null
+    },
+    "concurrency": {
+      "code": {
+        "passed": 0,
+        "total": 1,
+        "pct": 0.0
+      },
+      "llm": null
+    },
+    "correctness": {
+      "code": {
+        "passed": 0,
+        "total": 2,
+        "pct": 0.0
+      },
+      "llm": null
+    },
+    "no_bugs": {
+      "code": {
+        "passed": 0,
+        "total": 4,
+        "pct": 0.0
+      },
+      "llm": null
+    },
+    "performance": {
+      "code": {
+        "passed": 0,
+        "total": 4,
+        "pct": 0.0
+      },
+      "llm": null
+    },
+    "security": {
+      "code": {
+        "passed": 0,
+        "total": 8,
+        "pct": 0.0
+      },
+      "llm": null
+    }
+  },
+  "by_difficulty": {
+    "easy": {
+      "code": {
+        "passed": 0,
+        "total": 11,
+        "pct": 0.0
+      },
+      "llm": null
+    },
+    "hard": {
+      "code": {
+        "passed": 0,
+        "total": 6,
+        "pct": 0.0
+      },
+      "llm": null
+    },
+    "medium": {
+      "code": {
+        "passed": 0,
+        "total": 13,
+        "pct": 0.0
+      },
+      "llm": null
+    }
+  },
+  "tasks": [
+    {
+      "task_id": "task_001",
+      "description": "Division by zero on empty list",
+      "tags": [
+        "difficulty:easy",
+        "category:bug"
+      ],
+      "category": "bug",
+      "difficulty": "easy",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_002",
+      "description": "Dangerous eval() usage \u2014 security issue",
+      "tags": [
+        "difficulty:easy",
+        "category:security"
+      ],
+      "category": "security",
+      "difficulty": "easy",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_003",
+      "description": "Clean code \u2014 agent should NOT hallucinate bugs",
+      "tags": [
+        "difficulty:medium",
+        "category:no_bugs"
+      ],
+      "category": "no_bugs",
+      "difficulty": "medium",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_004",
+      "description": "O(n^2) performance issue \u2014 nested loop comparing element to itself",
+      "tags": [
+        "difficulty:medium",
+        "category:performance"
+      ],
+      "category": "performance",
+      "difficulty": "medium",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_005",
+      "description": "Unclosed file handle",
+      "tags": [
+        "difficulty:easy",
+        "category:bug"
+      ],
+      "category": "bug",
+      "difficulty": "easy",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_006",
+      "description": "Mutable default argument \u2014 classic Python footgun",
+      "tags": [
+        "difficulty:medium",
+        "category:bug"
+      ],
+      "category": "bug",
+      "difficulty": "medium",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_007",
+      "description": "Off-by-one error in range bounds",
+      "tags": [
+        "difficulty:easy",
+        "category:bug"
+      ],
+      "category": "bug",
+      "difficulty": "easy",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_008",
+      "description": "Modifying a list while iterating over it",
+      "tags": [
+        "difficulty:medium",
+        "category:bug"
+      ],
+      "category": "bug",
+      "difficulty": "medium",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_009",
+      "description": "Using `is` instead of `==` for value comparison",
+      "tags": [
+        "difficulty:easy",
+        "category:bug"
+      ],
+      "category": "bug",
+      "difficulty": "easy",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_010",
+      "description": "Catching too broad an exception (bare except)",
+      "tags": [
+        "difficulty:easy",
+        "category:bug"
+      ],
+      "category": "bug",
+      "difficulty": "easy",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_011",
+      "description": "Float equality comparison",
+      "tags": [
+        "difficulty:medium",
+        "category:bug"
+      ],
+      "category": "bug",
+      "difficulty": "medium",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_012",
+      "description": "Integer division when float division was intended",
+      "tags": [
+        "difficulty:easy",
+        "category:bug"
+      ],
+      "category": "bug",
+      "difficulty": "easy",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_013",
+      "description": "SQL injection via f-string",
+      "tags": [
+        "difficulty:medium",
+        "category:security"
+      ],
+      "category": "security",
+      "difficulty": "medium",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_014",
+      "description": "Command injection via os.system with user input",
+      "tags": [
+        "difficulty:medium",
+        "category:security"
+      ],
+      "category": "security",
+      "difficulty": "medium",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_015",
+      "description": "Path traversal \u2014 joining user input into a filesystem path",
+      "tags": [
+        "difficulty:hard",
+        "category:security"
+      ],
+      "category": "security",
+      "difficulty": "hard",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_016",
+      "description": "Weak password hashing with MD5",
+      "tags": [
+        "difficulty:medium",
+        "category:security"
+      ],
+      "category": "security",
+      "difficulty": "medium",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_017",
+      "description": "Hardcoded API key in source",
+      "tags": [
+        "difficulty:easy",
+        "category:security"
+      ],
+      "category": "security",
+      "difficulty": "easy",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_018",
+      "description": "Unsafe pickle deserialization of untrusted data",
+      "tags": [
+        "difficulty:hard",
+        "category:security"
+      ],
+      "category": "security",
+      "difficulty": "hard",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_019",
+      "description": "Insecure randomness used to generate auth tokens",
+      "tags": [
+        "difficulty:medium",
+        "category:security"
+      ],
+      "category": "security",
+      "difficulty": "medium",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_020",
+      "description": "Repeated string concatenation in a hot loop",
+      "tags": [
+        "difficulty:easy",
+        "category:performance"
+      ],
+      "category": "performance",
+      "difficulty": "easy",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_021",
+      "description": "Repeated linear search where a set would be O(1)",
+      "tags": [
+        "difficulty:easy",
+        "category:performance"
+      ],
+      "category": "performance",
+      "difficulty": "easy",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_022",
+      "description": "Synchronous blocking I/O inside an async function",
+      "tags": [
+        "difficulty:hard",
+        "category:performance"
+      ],
+      "category": "performance",
+      "difficulty": "hard",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_023",
+      "description": "Race condition \u2014 check-then-act on shared state without a lock",
+      "tags": [
+        "difficulty:hard",
+        "category:concurrency"
+      ],
+      "category": "concurrency",
+      "difficulty": "hard",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_024",
+      "description": "Logic bug \u2014 and/or precedence inverts the intent",
+      "tags": [
+        "difficulty:medium",
+        "category:correctness"
+      ],
+      "category": "correctness",
+      "difficulty": "medium",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_025",
+      "description": "Wrong sentinel \u2014 None ambiguous as 'not found' when None is a legal value",
+      "tags": [
+        "difficulty:medium",
+        "category:correctness"
+      ],
+      "category": "correctness",
+      "difficulty": "medium",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_026",
+      "description": "Catching the exception then silently swallowing it",
+      "tags": [
+        "difficulty:easy",
+        "category:bug"
+      ],
+      "category": "bug",
+      "difficulty": "easy",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_027",
+      "description": "Clean code \u2014 list comprehension over a filter is idiomatic, not a bug",
+      "tags": [
+        "difficulty:medium",
+        "category:no_bugs"
+      ],
+      "category": "no_bugs",
+      "difficulty": "medium",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_028",
+      "description": "Clean code \u2014 context manager and pathlib usage is correct",
+      "tags": [
+        "difficulty:medium",
+        "category:no_bugs"
+      ],
+      "category": "no_bugs",
+      "difficulty": "medium",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_029",
+      "description": "Clean async \u2014 proper aiohttp usage with session reuse",
+      "tags": [
+        "difficulty:hard",
+        "category:no_bugs"
+      ],
+      "category": "no_bugs",
+      "difficulty": "hard",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    },
+    {
+      "task_id": "task_030",
+      "description": "Multiple issues stacked \u2014 bare except + mutable default + O(n) lookup",
+      "tags": [
+        "difficulty:hard",
+        "category:bug"
+      ],
+      "category": "bug",
+      "difficulty": "hard",
+      "code_passed": false,
+      "code_reason": "Agent crashed: GEMINI_API_KEY not found. Copy .env.example to .env and add your key.",
+      "llm_passed": null,
+      "llm_score": null,
+      "llm_reason": null,
+      "duration_seconds": 0.0,
+      "trajectory_length": 0,
+      "error": "GEMINI_API_KEY not found. Copy .env.example to .env and add your key."
+    }
+  ]
+}
