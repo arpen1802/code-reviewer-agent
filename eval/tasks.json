@@ -38,5 +38,206 @@
     "input": "def read_config(path):\n    f = open(path, 'r')\n    data = f.read()\n    return data\n\nprint(read_config('config.txt'))",
     "expected_findings": ["file", "close", "context manager", "with", "leak"],
     "should_not_find": []
+  },
+
+  {
+    "id": "task_006",
+    "description": "Mutable default argument — classic Python footgun",
+    "tags": ["difficulty:medium", "category:bug"],
+    "input": "def append_user(name, users=[]):\n    users.append(name)\n    return users\n\nprint(append_user('alice'))\nprint(append_user('bob'))",
+    "expected_findings": ["mutable default", "default argument", "shared", "None"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_007",
+    "description": "Off-by-one error in range bounds",
+    "tags": ["difficulty:easy", "category:bug"],
+    "input": "def sum_to_n(n):\n    total = 0\n    for i in range(1, n):\n        total += i\n    return total\n\n# Intent: sum 1..n inclusive. sum_to_n(5) should be 15, but returns 10.\nprint(sum_to_n(5))",
+    "expected_findings": ["off-by-one", "off by one", "range", "inclusive", "n + 1"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_008",
+    "description": "Modifying a list while iterating over it",
+    "tags": ["difficulty:medium", "category:bug"],
+    "input": "def remove_evens(numbers):\n    for n in numbers:\n        if n % 2 == 0:\n            numbers.remove(n)\n    return numbers\n\nprint(remove_evens([1, 2, 4, 6, 7, 8]))",
+    "expected_findings": ["modify", "iterating", "skip", "copy", "comprehension"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_009",
+    "description": "Using `is` instead of `==` for value comparison",
+    "tags": ["difficulty:easy", "category:bug"],
+    "input": "def check_status(code):\n    if code is 200:\n        return 'ok'\n    return 'error'\n\nprint(check_status(200))",
+    "expected_findings": ["is", "==", "identity", "equality"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_010",
+    "description": "Catching too broad an exception (bare except)",
+    "tags": ["difficulty:easy", "category:bug"],
+    "input": "def safe_divide(a, b):\n    try:\n        return a / b\n    except:\n        return None\n\nprint(safe_divide(10, 0))\nprint(safe_divide(10, '2'))",
+    "expected_findings": ["bare except", "broad", "specific exception", "ZeroDivisionError"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_011",
+    "description": "Float equality comparison",
+    "tags": ["difficulty:medium", "category:bug"],
+    "input": "def is_third(x):\n    return x == 1/3\n\nprint(is_third(0.1 + 0.1 + 0.1 - 1/30))",
+    "expected_findings": ["float", "equality", "precision", "math.isclose", "tolerance"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_012",
+    "description": "Integer division when float division was intended",
+    "tags": ["difficulty:easy", "category:bug"],
+    "input": "def percentage(part, whole):\n    return (part // whole) * 100\n\nprint(percentage(3, 8))  # expected 37.5, gets 0",
+    "expected_findings": ["integer division", "//", "/", "floor", "truncation"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_013",
+    "description": "SQL injection via f-string",
+    "tags": ["difficulty:medium", "category:security"],
+    "input": "def get_user(conn, username):\n    cursor = conn.cursor()\n    query = f\"SELECT * FROM users WHERE name = '{username}'\"\n    cursor.execute(query)\n    return cursor.fetchone()",
+    "expected_findings": ["sql injection", "injection", "parameterized", "placeholder", "?"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_014",
+    "description": "Command injection via os.system with user input",
+    "tags": ["difficulty:medium", "category:security"],
+    "input": "import os\n\ndef ping_host(host):\n    os.system(f'ping -c 1 {host}')\n\nping_host(input('Enter host: '))",
+    "expected_findings": ["command injection", "shell", "subprocess", "shlex", "untrusted"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_015",
+    "description": "Path traversal — joining user input into a filesystem path",
+    "tags": ["difficulty:hard", "category:security"],
+    "input": "import os\n\ndef serve_file(filename):\n    base = '/var/www/uploads'\n    path = os.path.join(base, filename)\n    with open(path, 'rb') as f:\n        return f.read()\n\n# Attacker can pass '../../etc/passwd'\nserve_file('../../etc/passwd')",
+    "expected_findings": ["path traversal", "directory traversal", "..", "sanitize", "realpath", "resolve"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_016",
+    "description": "Weak password hashing with MD5",
+    "tags": ["difficulty:medium", "category:security"],
+    "input": "import hashlib\n\ndef hash_password(password: str) -> str:\n    return hashlib.md5(password.encode()).hexdigest()\n\ndef verify(password, stored_hash):\n    return hash_password(password) == stored_hash",
+    "expected_findings": ["md5", "weak", "bcrypt", "argon2", "scrypt", "salt"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_017",
+    "description": "Hardcoded API key in source",
+    "tags": ["difficulty:easy", "category:security"],
+    "input": "import requests\n\nAPI_KEY = 'sk-prod-AKIA3FXX7ZQ8L7VV2K9N'\n\ndef fetch_user(user_id: int):\n    headers = {'Authorization': f'Bearer {API_KEY}'}\n    return requests.get(f'https://api.example.com/users/{user_id}', headers=headers).json()",
+    "expected_findings": ["hardcoded", "secret", "environment variable", "env var", "credentials"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_018",
+    "description": "Unsafe pickle deserialization of untrusted data",
+    "tags": ["difficulty:hard", "category:security"],
+    "input": "import pickle\n\ndef load_session(blob: bytes):\n    return pickle.loads(blob)\n\n# Caller deserializes a cookie sent by the client.",
+    "expected_findings": ["pickle", "deserialization", "untrusted", "rce", "code execution"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_019",
+    "description": "Insecure randomness used to generate auth tokens",
+    "tags": ["difficulty:medium", "category:security"],
+    "input": "import random\nimport string\n\ndef new_session_token() -> str:\n    return ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(32))",
+    "expected_findings": ["random", "secrets", "cryptographically", "predictable", "token_urlsafe"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_020",
+    "description": "Repeated string concatenation in a hot loop",
+    "tags": ["difficulty:easy", "category:performance"],
+    "input": "def build_csv(rows):\n    output = ''\n    for row in rows:\n        output += ','.join(row) + '\\n'\n    return output\n\nbuild_csv([['a', 'b'], ['c', 'd']] * 100000)",
+    "expected_findings": ["concatenation", "join", "list", "O(n", "quadratic", "StringIO"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_021",
+    "description": "Repeated linear search where a set would be O(1)",
+    "tags": ["difficulty:easy", "category:performance"],
+    "input": "def filter_active(user_ids, active_ids):\n    return [uid for uid in user_ids if uid in active_ids]\n\n# active_ids is a list with 50k entries; user_ids has 50k entries.\n# This is O(n * m).",
+    "expected_findings": ["set", "O(n", "linear", "lookup", "membership", "performance"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_022",
+    "description": "Synchronous blocking I/O inside an async function",
+    "tags": ["difficulty:hard", "category:performance"],
+    "input": "import requests\n\nasync def fetch_user(user_id: int):\n    resp = requests.get(f'https://api.example.com/users/{user_id}')\n    return resp.json()",
+    "expected_findings": ["blocking", "async", "aiohttp", "httpx", "event loop", "sync"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_023",
+    "description": "Race condition — check-then-act on shared state without a lock",
+    "tags": ["difficulty:hard", "category:concurrency"],
+    "input": "import threading\n\nbalance = 100\n\ndef withdraw(amount):\n    global balance\n    if balance >= amount:\n        balance -= amount\n        return True\n    return False\n\nthreads = [threading.Thread(target=withdraw, args=(60,)) for _ in range(2)]\nfor t in threads: t.start()\nfor t in threads: t.join()\nprint(balance)  # may go negative",
+    "expected_findings": ["race condition", "lock", "TOCTOU", "atomic", "threading.Lock"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_024",
+    "description": "Logic bug — and/or precedence inverts the intent",
+    "tags": ["difficulty:medium", "category:correctness"],
+    "input": "def can_access(user):\n    # Intent: must be verified AND (admin OR active).\n    return user.is_admin or user.is_active and user.is_verified\n\n# Operator precedence: 'and' binds tighter than 'or', so this is\n# really (admin) or (active and verified) — an unverified admin still passes.",
+    "expected_findings": ["precedence", "parentheses", "and", "or", "boolean"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_025",
+    "description": "Wrong sentinel — None ambiguous as 'not found' when None is a legal value",
+    "tags": ["difficulty:medium", "category:correctness"],
+    "input": "def first_or_none(items, predicate):\n    for x in items:\n        if predicate(x):\n            return x\n    return None\n\n# Caller can't distinguish 'no match' from 'matched None'.\nresult = first_or_none([None, 1, 2], lambda x: x is None)",
+    "expected_findings": ["sentinel", "None", "ambiguous", "raise", "tuple", "Optional"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_026",
+    "description": "Catching the exception then silently swallowing it",
+    "tags": ["difficulty:easy", "category:bug"],
+    "input": "def parse_int(value):\n    try:\n        return int(value)\n    except Exception:\n        pass\n\nprint(parse_int('abc'))",
+    "expected_findings": ["swallow", "silently", "None", "log", "raise", "explicit"],
+    "should_not_find": []
+  },
+  {
+    "id": "task_027",
+    "description": "Clean code — list comprehension over a filter is idiomatic, not a bug",
+    "tags": ["difficulty:medium", "category:no_bugs"],
+    "input": "def even_squares(numbers: list[int]) -> list[int]:\n    return [n * n for n in numbers if n % 2 == 0]\n\nprint(even_squares([1, 2, 3, 4, 5]))",
+    "expected_findings": [],
+    "should_not_find": ["bug", "incorrect", "wrong", "broken", "fix"]
+  },
+  {
+    "id": "task_028",
+    "description": "Clean code — context manager and pathlib usage is correct",
+    "tags": ["difficulty:medium", "category:no_bugs"],
+    "input": "from pathlib import Path\n\ndef read_json_lines(path: str) -> list[str]:\n    p = Path(path)\n    with p.open('r', encoding='utf-8') as f:\n        return [line.rstrip('\\n') for line in f if line.strip()]\n",
+    "expected_findings": [],
+    "should_not_find": ["leak", "unclosed", "broken", "bug"]
+  },
+  {
+    "id": "task_029",
+    "description": "Clean async — proper aiohttp usage with session reuse",
+    "tags": ["difficulty:hard", "category:no_bugs"],
+    "input": "import aiohttp\nimport asyncio\n\nasync def fetch_all(urls):\n    async with aiohttp.ClientSession() as session:\n        async def one(url):\n            async with session.get(url) as resp:\n                return await resp.text()\n        return await asyncio.gather(*(one(u) for u in urls))\n",
+    "expected_findings": [],
+    "should_not_find": ["blocking", "broken", "leak", "bug"]
+  },
+  {
+    "id": "task_030",
+    "description": "Multiple issues stacked — bare except + mutable default + O(n) lookup",
+    "tags": ["difficulty:hard", "category:bug"],
+    "input": "KNOWN_USERS = []\n\ndef register(name, history=[]):\n    history.append(name)\n    try:\n        if name in KNOWN_USERS:\n            return 'duplicate'\n        KNOWN_USERS.append(name)\n        return 'ok'\n    except:\n        return None\n\nprint(register('alice'))\nprint(register('bob'))",
+    "expected_findings": ["mutable default", "bare except", "in", "set", "broad"],
+    "should_not_find": []
   }
 ]
