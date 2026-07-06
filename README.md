@@ -1,6 +1,6 @@
 # AI Code Reviewer Agent
 
-A Python agent that reviews code by actually executing it, remembering past sessions, and enforcing safety guardrails — built progressively from a basic agent loop into a production-ready system.
+A multi-agent Python code reviewer that executes the code it reviews, retrieves context from the target codebase (RAG), reviews git diffs with repository awareness, remembers past sessions, and enforces safety guardrails — built progressively from a basic agent loop into a production-ready system with evals and observability.
 
 ---
 
@@ -8,26 +8,33 @@ A Python agent that reviews code by actually executing it, remembering past sess
 
 ```
 code-reviewer-agent/
+├── .github/workflows/
+│   └── evals.yml             # CI: runs the eval suite on PRs to main
 ├── agents/
-│   ├── orchestrator.py       # Multi-agent coordinator + multimodality
+│   ├── orchestrator.py       # Multi-agent coordinator + multimodality + session_id
 │   ├── reviewer_agent.py     # Code quality specialist
 │   ├── security_agent.py     # Security vulnerability specialist
 │   └── test_writer_agent.py  # Test generation specialist
+├── docs/
+│   └── evals.md              # Eval suite docs: how to run, how to add tasks
 ├── eval/
-│   ├── tasks.json            # Task suite: 5 test cases with expected findings
+│   ├── tasks.json            # Task suite: 30 test cases with expected findings
 │   ├── graders.py            # Code-based grader + LLM-as-judge grader
 │   ├── harness.py            # Runner: executes tasks, captures trajectories
-│   └── run_eval.py           # Entry point: runs suite, prints results
-├── agent.py          # Core single agent loop (also used by eval)
-├── tools.py          # Tool implementations (run_python_code, read_file)
-├── memory.py         # Long-term memory (load/save across sessions)
+│   ├── version.py            # PROMPT_VERSION baked into every saved result
+│   ├── run_eval.py           # Entry point: --save baselines, --compare diffs
+│   └── results/              # Saved baselines: <ts>-<sha>.json
+├── agent.py          # Core single-agent loop (also used by eval harness)
+├── tools.py          # Tool implementations (run_python_code, read_file, get_git_diff)
+├── codebase_index.py # RAG over the target repo (AST chunking + ChromaDB retrieval)
+├── memory.py         # ChromaDB long-term memory (load/save across sessions)
+├── observability.py  # Langfuse @observed / span / generation helpers
 ├── guardrails.py     # Safety checks (content filter + action limiter)
-├── main.py           # CLI entry point
+├── main.py           # CLI entry point (flushes Langfuse on exit)
 ├── sample_code.py    # Buggy test file for trying the agent
-├── memory.json       # Auto-generated: persisted review history (gitignored)
 ├── requirements.txt  # Python dependencies
-├── .env.example      # API key template
-└── .gitignore
+├── .env.example      # GEMINI_API_KEY + optional LANGFUSE_* keys
+└── .gitignore        # Ignores chroma_db/, logs/, memory.json
 ```
 
 ---
@@ -57,6 +64,13 @@ cp .env.example .env
 ## Usage
 
 ```bash
+# Index a codebase for repository-aware (RAG) review — run once per repo
+python main.py --index /path/to/repo
+
+# Review the uncommitted changes in a repo (diff review mode)
+python main.py --diff /path/to/repo          # against HEAD
+python main.py --diff /path/to/repo main     # feature branch against main
+
 # Review a Python file
 python main.py sample_code.py
 
@@ -74,9 +88,11 @@ python main.py
 ### Multi-Agent Architecture
 
 ```
-User Input (code, file path, or screenshot)
+User Input (code, file path, git diff, or screenshot)
         ↓
 [Guardrail] Input checked for injection attempts
+        ↓
+[RAG] Memory (similar past reviews) + Codebase index (related code)
         ↓
 Orchestrator Agent
   ├── [parallel] Reviewer Agent    → code quality, bugs, readability
@@ -151,31 +167,61 @@ all 5 go into prompt               semantic search → top 3 matches
                              only relevant reviews go into prompt
 ```
 
-### ✅ Production Engineering: Structured Observability
+### ✅ Codebase RAG: repository-aware review
 
-Every agent action emits a JSON event to `~/.code_reviewer_db/runs.jsonl` via [`logger.py`](./logger.py).
+Reviews are grounded in the *actual repository*, not just the snippet under review. This is a second, separate RAG pipeline (`codebase_index.py`) alongside review memory:
 
-- **Trace hierarchy** — `session_start` → (`memory_load`, `agent_start`, `tool_call`, `agent_done`) × N → `session_end`. Each event carries `session_id`, `trace_id`, `ts`, and per-event fields (latency_ms, output_chars, error).
-- **Per-tool-call timing** — every `run_python_code`/`read_file`/`save_memory` call inside each specialist agent is wrapped with `time.time()` and logged with its latency.
-- **Parallel-agent fan-out** — the orchestrator logs each specialist's start/end independently, so you can see if one agent is consistently the slow path.
-- **CLI dashboard** — [`log_viewer.py`](./log_viewer.py) pretty-prints the JSONL with per-agent latency breakdown, tool-call timing, and an estimated cost per trace. `python log_viewer.py` shows all traces, `--last 1` only the most recent, `--tail` is live like `tail -f`.
+1. `--index <repo>` walks the repo and splits every `.py` file into semantic chunks using the **AST** — one chunk per top-level function/class, plus a module-level chunk for imports and constants.
+2. Chunks are embedded and stored in a dedicated ChromaDB collection with `path`, `symbol`, and line-range metadata.
+3. During review, agents retrieve the most relevant chunks via the `search_codebase` tool (the orchestrator also does one shared retrieval pass for all three specialists).
 
-This implements the "Layer 0: Infrastructure" idea from the production engineering lecture — structured logs you can grep, tail, or pull into pandas in one line.
+The result: findings like *"this change breaks `run_eval.py:41`, which still calls the old signature"* or *"this duplicates the existing helper in `guardrails.py`"* — with real file:line references.
+
+```
+Review request (file or diff)
+        ↓
+embed → search codebase index → top-k related chunks
+        ↓
+callers / helpers / conventions injected into agent context
+        ↓
+repository-specific findings with file:line citations
+```
+
+### ✅ Diff review mode
+
+`--diff <repo> [base_ref]` reviews *what changed* instead of whole files — the way real code review works:
+
+- Pulls `git diff --unified=5` against `base_ref` (default `HEAD`, pass `main` to review a feature branch)
+- Combines each hunk with retrieved codebase context, so agents can check whether a change breaks callers or violates existing conventions
+- Available to the agent as a `get_git_diff` tool as well, so it can fetch diffs itself when asked
+
+### ✅ Production Engineering: Langfuse tracing
+
+Tracing lives in [`observability.py`](./observability.py) — a thin wrapper over the [Langfuse](https://langfuse.com) Python SDK that silently no-ops when `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` are unset, so the project still runs without an account.
+
+**What's captured** when Langfuse is configured:
+
+- **One trace per agent invocation** — `run_orchestrator`, `run_reviewer_agent`, `run_security_agent`, `run_test_writer_agent`, `run_agent`, and the four tool functions are all `@observed`. Input/output are auto-captured from function args and return values.
+- **Real Gemini token counts** — every `chat.send_message(...)` is wrapped in a `generation` observation that reads `response.usage_metadata.prompt_token_count` / `candidates_token_count`. Langfuse computes per-trace cost from these via its model pricing table.
+- **Sessions view** — the orchestrator generates one `session_id` per user request and propagates it to each specialist agent. All four traces (orchestrator + reviewer + security + test_writer) appear together in Langfuse's Sessions view, so you can see a complete multi-agent run at a glance.
+- **Parallel-agent fan-out** — each specialist runs in its own thread and creates its own trace. They share the same session_id (queryable as one unit) without us having to fight OpenTelemetry context propagation across threads.
+- **Spans for vision and memory** — the orchestrator's image-extraction call (multimodality) and ChromaDB memory load/save are captured as nested observations inside the orchestrator trace.
+
+This is the same observability stack used in [scalable-take-home](https://github.com/arpen1802/scalable-take-home) ([`src/app/observability.py`](https://github.com/arpen1802/scalable-take-home/blob/main/src/app/observability.py)), so all my agent projects share one tool and one mental model.
+
+**Setup:** sign up for Langfuse Cloud (free tier), grab the public+secret keys from `Settings → API Keys`, and put them in `.env` (see `.env.example`).
 
 ---
 
 ## Roadmap
 
-### Next: replace the homegrown logger with Langfuse
+These are the next concrete things this repo wants but doesn't have yet.
 
-`logger.py` and the per-agent timing wrappers emit the same shape of data Langfuse captures automatically via its LangChain `CallbackHandler` — per-call latency, prompt/response text, trace hierarchy, token usage. Migrating gets us:
-
-- A real trace UI (Sessions view, per-call drill-down) instead of grepping JSONL.
-- **Actual** Gemini token counts via `response.usage_metadata`, instead of the current 4-chars-per-token approximation in `log_viewer.py`.
-- Consistency with the observability stack already in use in [scalable-take-home](https://github.com/arpen1802/scalable-take-home) (`src/app/observability.py`).
-- ~180 lines of `logger.py` deleted.
-
-`log_viewer.py` stays as a no-account-needed fallback, but reads from a project-local `./logs/runs.jsonl` rather than the current home-dir hidden path.
+- **Cost telemetry in eval results.** Sum input + output tokens per task and persist them alongside pass rates so we can chart cost vs score over time across prompt versions.
+- **Trajectory-based grader.** Assert that the agent always called `run_python_code` before claiming a bug exists. Belongs in `eval/graders.py` as a third grader.
+- **Per-category pass-rate floors as CI gates.** Fail the build if, say, `security` drops below 70% — see `.github/workflows/evals.yml`.
+- **`--quick` smoke set** (one task per category) for fast prompt-iteration runs without paying the full 30-task tax.
+- **Langfuse dataset wiring.** Push the eval task suite into a Langfuse dataset so eval runs land in the Langfuse UI alongside production traces — same UI for both QA and prod debugging.
 
 ---
 

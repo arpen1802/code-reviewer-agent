@@ -2,6 +2,12 @@
 main.py — CLI entry point for the Code Reviewer Agent.
 
 Usage:
+    # Index a codebase for RAG-powered, repository-aware review:
+    python main.py --index /path/to/repo
+
+    # Review the uncommitted changes in a repo (diff review mode):
+    python main.py --diff /path/to/repo [base_ref]
+
     # Review a file:
     python main.py sample_code.py
 
@@ -14,7 +20,10 @@ Usage:
 
 import sys
 from agents.orchestrator import run_orchestrator
+from codebase_index import index_codebase
+from tools import get_git_diff
 from guardrails import is_input_clean
+from observability import flush as flush_langfuse, is_enabled as langfuse_enabled
 
 
 def main():
@@ -27,7 +36,30 @@ def main():
 
     # ── Parse arguments ───────────────────────────────────────────────────────
     if len(sys.argv) > 1:
-        if sys.argv[1] == "--image" and len(sys.argv) > 2:
+        if sys.argv[1] == "--index":
+            # Index mode: build the codebase RAG index, then exit
+            target = sys.argv[2] if len(sys.argv) > 2 else "."
+            print(f"\nIndexing codebase: {target}\n")
+            print(index_codebase(target))
+            return
+
+        elif sys.argv[1] == "--diff":
+            # Diff review mode: review uncommitted changes with codebase context
+            repo = sys.argv[2] if len(sys.argv) > 2 else "."
+            base_ref = sys.argv[3] if len(sys.argv) > 3 else "HEAD"
+            print(f"\nReviewing diff of '{repo}' against '{base_ref}'\n")
+            diff = get_git_diff(repo_path=repo, base_ref=base_ref)
+            if diff.startswith("Error") or diff.startswith("(no changes"):
+                print(diff)
+                return
+            user_input = (
+                f"Please review the following git diff (changes against {base_ref}). "
+                f"Focus on what changed; use the codebase context to check whether "
+                f"changes break callers or violate existing conventions.\n\n"
+                f"```diff\n{diff}\n```"
+            )
+
+        elif sys.argv[1] == "--image" and len(sys.argv) > 2:
             # Multimodal mode: review a screenshot
             image_path = sys.argv[2]
             print(f"\nReviewing image: {image_path}")
@@ -68,9 +100,14 @@ def main():
 
     # ── Run the multi-agent orchestrator ──────────────────────────────────────
     print("\nOrchestrating multi-agent review...\n")
-    review = run_orchestrator(user_input, image_path=image_path)
-
-    print("\n" + review)
+    try:
+        review = run_orchestrator(user_input, image_path=image_path)
+        print("\n" + review)
+    finally:
+        # Short-lived CLI process: flush any pending Langfuse traces before exit
+        # so they show up in the UI promptly (no-op if Langfuse isn't configured).
+        if langfuse_enabled():
+            flush_langfuse()
 
 
 if __name__ == "__main__":

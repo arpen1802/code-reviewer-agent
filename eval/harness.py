@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agent import run_agent
 import tools as tools_module
 from memory import clear_memory
+from observability import flush as flush_langfuse
 
 
 def reset_memory():
@@ -92,13 +93,18 @@ def run_task(task: dict) -> TaskResult:
 
     try:
         user_input = f"Please review this code:\n\n```python\n{task['input']}\n```"
-        agent_output = run_agent(user_input) or ""
+        # Pass the task id as session_id so each task is a recognizable session
+        # in Langfuse (groups its multiple Gemini turns under one heading).
+        agent_output = run_agent(user_input, session_id=f"eval:{task['id']}") or ""
     except Exception as e:
         error = str(e)
         agent_output = ""
     finally:
         # Always restore the original registry, even if agent crashed
         tools_module.TOOL_REGISTRY.update(original_registry)
+        # Flush per-task so partial runs still produce visible traces (no-op
+        # when Langfuse isn't configured).
+        flush_langfuse()
 
     duration = time.time() - start
 

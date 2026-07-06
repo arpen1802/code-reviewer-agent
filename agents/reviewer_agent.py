@@ -8,17 +8,18 @@ Notice that this agent has the same structure as the original agent.py —
 same loop, same tool registry pattern. The only thing that changes is
 the system prompt, which narrows the agent's focus to quality alone.
 
-Observability: every tool call is timed and logged as a structured
-JSON event so we can see exactly where time is spent inside this agent.
+Observability: each invocation is one Langfuse trace (via @observed).
+Each Gemini call is captured as a `generation` observation with real
+token counts. Tool calls are traced at the tool function in tools.py.
 """
 
 import os
-import time
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
+
 from tools import run_python_code, read_file, TOOL_REGISTRY
-from logger import get_logger
+from observability import generation, gemini_usage, observed, set_session
 
 load_dotenv()
 
@@ -38,18 +39,26 @@ Rules:
 - Output a clean, structured review.
 """
 
+MODEL = "gemini-2.5-flash"
 
-def run_reviewer_agent(user_input: str) -> str:
+
+@observed
+def run_reviewer_agent(user_input: str, session_id: str | None = None) -> str:
     """
     Runs the code quality review agent.
 
     Args:
         user_input: Code snippet or file path to review.
+        session_id: Optional shared session id so the orchestrator and all
+                    specialist agents group together in the Langfuse Sessions
+                    view. Passed by the orchestrator; harmless if omitted.
 
     Returns:
         A structured quality review as a string.
     """
-    log = get_logger()
+    if session_id:
+        set_session(session_id, tags=["reviewer", MODEL])
+
     api_key = os.getenv("GEMINI_API_KEY")
     client = genai.Client(api_key=api_key)
 
@@ -59,17 +68,24 @@ def run_reviewer_agent(user_input: str) -> str:
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
     )
 
-    chat = client.chats.create(model="gemini-2.5-flash", config=config)
-    response = chat.send_message(user_input)
+    chat = client.chats.create(model=MODEL, config=config)
 
-    for _ in range(10):
+    with generation("gemini:reviewer:initial", model=MODEL, input={"user": user_input}) as g:
+        response = chat.send_message(user_input)
+        g.update(output=response.text or "(tool calls)", usage_details=gemini_usage(response))
+
+    for turn in range(10):
         if not response.function_calls:
             if response.text:
                 return response.text
-            # Gemini finished tool calls but wrote no review — nudge it
-            followup = chat.send_message(
-                "Now write your complete structured code quality review based on everything you found."
-            )
+            with generation(
+                "gemini:reviewer:final-nudge", model=MODEL,
+                input={"nudge": "write the final quality review"},
+            ) as g:
+                followup = chat.send_message(
+                    "Now write your complete structured code quality review based on everything you found."
+                )
+                g.update(output=followup.text or "", usage_details=gemini_usage(followup))
             return followup.text or "(Reviewer agent returned no output.)"
 
         tool_results = []
@@ -77,36 +93,20 @@ def run_reviewer_agent(user_input: str) -> str:
             tool_name = fc.name
             tool_args = dict(fc.args)
             print(f"    [reviewer] → {tool_name}({tool_args})")
-
-            # ── Log + time the tool call ──────────────────────────────────────
-            t_start = time.time()
-            try:
-                result = TOOL_REGISTRY[tool_name](**tool_args)
-                t_ms = (time.time() - t_start) * 1000
-                log.tool_call(
-                    agent="reviewer",
-                    tool_name=tool_name,
-                    tool_args=tool_args,
-                    latency_ms=t_ms,
-                    result_len=len(str(result)) if result else 0,
-                )
-            except Exception as exc:
-                t_ms = (time.time() - t_start) * 1000
-                log.tool_call(
-                    agent="reviewer",
-                    tool_name=tool_name,
-                    tool_args=tool_args,
-                    latency_ms=t_ms,
-                    error=str(exc),
-                )
-                raise
-
+            # Tool function itself is @observed → automatic span
+            result = TOOL_REGISTRY[tool_name](**tool_args)
             tool_results.append(
                 types.Part.from_function_response(
                     name=tool_name,
-                    response={"result": result}
+                    response={"result": result},
                 )
             )
-        response = chat.send_message(tool_results)
+
+        with generation(
+            f"gemini:reviewer:turn-{turn + 1}", model=MODEL,
+            input={"tool_results_count": len(tool_results)},
+        ) as g:
+            response = chat.send_message(tool_results)
+            g.update(output=response.text or "(more tool calls)", usage_details=gemini_usage(response))
 
     return "Error: Reviewer agent exceeded max iterations."

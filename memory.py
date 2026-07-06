@@ -36,6 +36,8 @@ from chromadb import EmbeddingFunction, Documents, Embeddings
 from google import genai
 from dotenv import load_dotenv
 
+from observability import observed
+
 load_dotenv()
 
 # ChromaDB data lives in the user's home directory, not the project folder.
@@ -147,6 +149,7 @@ def _save_prefs(prefs: dict) -> None:
 
 # ── Tools the agent can call ──────────────────────────────────────────────────
 
+@observed
 def load_memory(query: str = "") -> str:
     """
     Retrieves relevant past reviews from the vector database.
@@ -214,6 +217,7 @@ def load_memory(query: str = "") -> str:
     return "\n".join(lines)
 
 
+@observed
 def save_memory(
     file_reviewed: str,
     issues_found: list[str],

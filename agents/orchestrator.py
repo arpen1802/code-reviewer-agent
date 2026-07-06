@@ -14,39 +14,42 @@ This file also adds multimodality: the orchestrator can accept an
 image (e.g. a screenshot of code) in addition to text, using Gemini's
 vision capability to extract code from the image before delegating.
 
-Observability (Lecture 5): every key step is logged as a structured
-JSON event via logger.py — session start/end, agent dispatch, memory
-load/save. This fixes the "Black Box" problem from the 7 prototype problems.
+Observability (Lecture 5, post-Langfuse migration):
+  - One trace per orchestrator invocation (@observed).
+  - Memory load / save and the vision extraction are nested spans.
+  - Each parallel sub-agent runs in its own thread and creates its own
+    @observed trace. We pass the orchestrator's session_id into each
+    so all four traces group in Langfuse's Sessions view as one user
+    request. (Trying to nest spans across thread boundaries would mean
+    fighting OpenTelemetry context propagation; the session_id model
+    matches the lecture's "Session → Trace → Step" hierarchy and is
+    queryable without that complexity.)
 """
 
 import os
-import time
+import uuid
 import concurrent.futures
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
+
 from memory import load_memory, save_memory
+from codebase_index import search_codebase
 from agents.reviewer_agent import run_reviewer_agent
 from agents.security_agent import run_security_agent
 from agents.test_writer_agent import run_test_writer_agent
-from logger import get_logger
+from observability import generation, gemini_usage, observed, set_session, span
 
 load_dotenv()
 
 
 # ── Multimodality: extract code from an image ─────────────────────────────────
 
-def extract_code_from_image(image_path: str) -> str:
+def _extract_code_from_image(image_path: str) -> str:
     """
     Uses Gemini's vision capability to extract Python code from an image.
-    This is the multimodality feature: the agent can accept a screenshot
-    instead of (or alongside) text.
-
-    Args:
-        image_path: Path to a PNG or JPEG image file.
-
-    Returns:
-        Extracted Python code as a string, or an error message.
+    Wrapped in a generation observation so the vision call shows up in the
+    trace alongside the rest of the orchestrator's work.
     """
     api_key = os.getenv("GEMINI_API_KEY")
     client = genai.Client(api_key=api_key)
@@ -57,27 +60,36 @@ def extract_code_from_image(image_path: str) -> str:
     except FileNotFoundError:
         return f"Error: Image file '{image_path}' not found."
 
-    # Determine mime type from extension
     ext = os.path.splitext(image_path)[1].lower()
     mime_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
     mime_type = mime_map.get(ext, "image/png")
 
-    # Build a multimodal message: image + text instruction
     image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
     text_part = types.Part.from_text(
         "Extract all Python code visible in this image. "
         "Return only the code, no explanation."
     )
 
-    response = client.models.generate_content(
+    with generation(
+        "gemini:orchestrator:vision",
         model="gemini-2.5-flash",
-        contents=[image_part, text_part],
-    )
+        input={"image_path": image_path, "mime_type": mime_type},
+    ) as g:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[image_part, text_part],
+        )
+        g.update(output=response.text or "", usage_details=gemini_usage(response))
     return response.text
+
+
+# Keep the old public name as a thin alias for callers / docs that referenced it.
+extract_code_from_image = _extract_code_from_image
 
 
 # ── Orchestrator ──────────────────────────────────────────────────────────────
 
+@observed
 def run_orchestrator(user_input: str, image_path: str | None = None) -> str:
     """
     Orchestrates a full multi-agent code review.
@@ -89,70 +101,53 @@ def run_orchestrator(user_input: str, image_path: str | None = None) -> str:
     Returns:
         A merged final review from all three specialist agents.
     """
-    log = get_logger()
-    session_start_time = time.time()
+    # One shared session_id across the orchestrator trace and the 3 sub-agent
+    # traces. View them grouped under "Sessions" in the Langfuse UI.
+    session_id = str(uuid.uuid4())
+    set_session(session_id, tags=["orchestrator"])
 
     # ── Step 0: Multimodality — extract code from image if provided ───────────
     if image_path:
         print(f"\n  [orchestrator] Extracting code from image: {image_path}")
-        extracted_code = extract_code_from_image(image_path)
+        with span("orchestrator:vision_extract", input={"image_path": image_path}):
+            extracted_code = _extract_code_from_image(image_path)
         print(f"  [orchestrator] Extracted {len(extracted_code)} chars of code")
-        # Prepend extracted code to the user's input
         user_input = f"Extracted from screenshot:\n```python\n{extracted_code}\n```\n\n{user_input}"
-
-    # ── Log: session start ────────────────────────────────────────────────────
-    log.session_start(input_summary=user_input[:200])
 
     # ── Step 1: Load memory ───────────────────────────────────────────────────
     # Pass the current code as the query so ChromaDB does semantic search:
     # "find past reviews whose code is most similar to what we're reviewing now"
     print("\n  [orchestrator] Loading memory...")
-    mem_start = time.time()
     memory_context = load_memory(query=user_input[:2000])
-    mem_latency = (time.time() - mem_start) * 1000
-
-    # Show what was retrieved so the user can see semantic search in action
     non_empty = [l for l in memory_context.splitlines() if l.strip()]
     first_line = non_empty[0] if non_empty else "none"
     print(f"  [orchestrator] Memory: {first_line}")
 
-    # Count how many past reviews were returned — each one produces a "  File:" line
-    results_found = memory_context.count("\n  File:")
-    log.memory_load(
-        query_chars=len(user_input[:2000]),
-        results_found=results_found,
-        latency_ms=mem_latency,
+    # ── Step 1.5: Retrieve codebase context (RAG over the repo under review) ──
+    # One retrieval pass here, shared by all three sub-agents — cheaper than
+    # each agent retrieving separately, and keeps their prompts consistent.
+    print("  [orchestrator] Retrieving codebase context...")
+    with span("orchestrator:codebase_rag", input={"query_chars": min(len(user_input), 2000)}):
+        codebase_context = search_codebase(user_input[:2000])
+    cb_first = next((l for l in codebase_context.splitlines() if l.strip()), "none")
+    print(f"  [orchestrator] Codebase: {cb_first}")
+
+    full_input = (
+        f"Memory context:\n{memory_context}\n\n"
+        f"Codebase context (related code retrieved from the repository — use it to "
+        f"ground findings in actual callers, helpers, and conventions):\n"
+        f"{codebase_context}\n\n---\n\n{user_input}"
     )
 
-    full_input = f"Memory context:\n{memory_context}\n\n---\n\n{user_input}"
-
     # ── Step 2: Run all three agents in parallel ──────────────────────────────
-    # This is the key multi-agent pattern: parallel execution.
-    # Each agent runs independently and returns its report.
+    # Each agent runs in its own thread and creates its own @observed trace.
+    # session_id ties them together in Langfuse's Sessions view.
     print("\n  [orchestrator] Dispatching to specialist agents in parallel...\n")
 
-    def run_with_logging(agent_name: str, fn, input_text: str):
-        """Wrap an agent call with start/done log events."""
-        log.agent_start(agent_name)
-        start = time.time()
-        try:
-            result = fn(input_text)
-            latency = (time.time() - start) * 1000
-            log.agent_done(
-                agent=agent_name,
-                latency_ms=latency,
-                output_chars=len(result) if result else 0,
-            )
-            return result
-        except Exception as exc:
-            latency = (time.time() - start) * 1000
-            log.agent_done(agent=agent_name, latency_ms=latency, error=str(exc))
-            raise
-
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        future_review   = executor.submit(run_with_logging, "reviewer",    run_reviewer_agent,    full_input)
-        future_security = executor.submit(run_with_logging, "security",    run_security_agent,    full_input)
-        future_tests    = executor.submit(run_with_logging, "test_writer", run_test_writer_agent, full_input)
+        future_review   = executor.submit(run_reviewer_agent,    full_input, session_id=session_id)
+        future_security = executor.submit(run_security_agent,    full_input, session_id=session_id)
+        future_tests    = executor.submit(run_test_writer_agent, full_input, session_id=session_id)
 
         print("  Waiting for all agents to finish...")
         review_report   = future_review.result()
@@ -162,41 +157,26 @@ def run_orchestrator(user_input: str, image_path: str | None = None) -> str:
     print("\n  [orchestrator] All agents done. Merging reports...")
 
     # ── Step 3: Merge reports ─────────────────────────────────────────────────
-    # The orchestrator assembles the final output — it's the only one who sees
-    # all three reports.
     merged = _merge_reports(review_report, security_report, test_report)
 
     # ── Step 4: Save memory ───────────────────────────────────────────────────
-    # Pass code_snippet so the embedding captures the actual code —
-    # this is what makes future semantic searches find similar bugs/patterns.
     filename = _extract_filename(user_input)
     issues_summary = [
         f"Quality: {_first_line(review_report)}",
         f"Security: {_first_line(security_report)}",
     ]
 
-    save_start = time.time()
     save_memory(
         file_reviewed=filename,
         issues_found=issues_summary,
-        code_snippet=user_input[:2000],  # embed the actual code, not just metadata
+        code_snippet=user_input[:2000],
     )
-    save_latency = (time.time() - save_start) * 1000
-    log.memory_save(file_reviewed=filename, latency_ms=save_latency)
     print("  [orchestrator] Memory saved.")
-
-    # ── Log: session end ──────────────────────────────────────────────────────
-    total_latency = (time.time() - session_start_time) * 1000
-    log.session_end(total_latency_ms=total_latency)
-    print(f"  [orchestrator] Total latency: {total_latency / 1000:.1f}s  (logged to {_log_path()})")
 
     return merged
 
 
-def _log_path() -> str:
-    from pathlib import Path
-    return str(Path.home() / ".code_reviewer_db" / "runs.jsonl")
-
+# ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _merge_reports(review: str, security: str, tests: str) -> str:
     """Combines the three specialist reports into one readable final review."""

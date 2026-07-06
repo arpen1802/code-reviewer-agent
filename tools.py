@@ -13,8 +13,10 @@ if the code is flagged as dangerous.
 import subprocess
 import sys
 from guardrails import is_code_safe
+from observability import observed
 
 
+@observed
 def run_python_code(code: str) -> str:
     """
     Executes a Python code snippet in a subprocess and returns
@@ -50,6 +52,34 @@ def run_python_code(code: str) -> str:
         return f"Error running code: {str(e)}"
 
 
+@observed
+def get_git_diff(repo_path: str = ".", base_ref: str = "HEAD") -> str:
+    """
+    Returns the current git diff of a repository — the uncommitted changes
+    relative to base_ref (default HEAD). Used for diff review mode:
+    reviewing what *changed*, with codebase context, rather than whole files.
+
+    Args:
+        repo_path: Path to the git repository (default: current directory).
+        base_ref:  Git ref to diff against (default "HEAD"; pass e.g. "main"
+                   to review a feature branch against main).
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", repo_path, "diff", "--unified=5", base_ref],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode != 0:
+            return f"Error running git diff: {result.stderr.strip()}"
+        diff = result.stdout.strip()
+        return diff if diff else "(no changes — working tree is clean)"
+    except FileNotFoundError:
+        return "Error: git is not installed or repo_path is not a repository."
+    except subprocess.TimeoutExpired:
+        return "Error: git diff timed out."
+
+
+@observed
 def read_file(filepath: str) -> str:
     """
     Reads a file from disk and returns its full contents as a string.
@@ -70,4 +100,5 @@ def read_file(filepath: str) -> str:
 TOOL_REGISTRY = {
     "run_python_code": run_python_code,
     "read_file": read_file,
+    "get_git_diff": get_git_diff,
 }

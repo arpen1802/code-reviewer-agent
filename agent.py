@@ -23,14 +23,18 @@ import os
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
-from tools import TOOL_REGISTRY, run_python_code, read_file
+
+from tools import TOOL_REGISTRY, run_python_code, read_file, get_git_diff
 from memory import load_memory, save_memory
+from codebase_index import search_codebase
+from observability import generation, gemini_usage, observed, set_session
 
 load_dotenv()
 
-# Register memory tools so the agent loop can call them by name
+# Register memory + codebase RAG tools so the agent loop can call them by name
 TOOL_REGISTRY["load_memory"] = load_memory
 TOOL_REGISTRY["save_memory"] = save_memory
+TOOL_REGISTRY["search_codebase"] = search_codebase
 
 # ── System prompt ────────────────────────────────────────────────────────────
 # Updated for Day 2: the agent now has memory.
@@ -44,16 +48,24 @@ At the start of every review:
    query so the vector database can find the most similar past reviews.
    This uses semantic search, so you'll get relevant context, not just recent history.
 2. If the user gives a file path, call read_file to get the code.
-3. Call run_python_code to execute the code and observe its real output.
-4. Provide a structured review covering:
+   If the user asks to review changes/a diff, call get_git_diff instead.
+3. Call search_codebase with the code (or each significant diff hunk) to
+   retrieve related code from the repository: callers of changed functions,
+   existing helpers, and the codebase's conventions. Ground your findings in
+   this context — e.g. flag when a change breaks a caller or duplicates an
+   existing helper, citing the file:line locations you retrieved.
+4. Call run_python_code to execute the code and observe its real output.
+5. Provide a structured review covering:
    - What the code does
    - Bugs or errors found (with line numbers if possible)
    - Code quality issues (naming, structure, readability)
    - Specific, actionable suggestions for improvement
    - If you've seen similar code or issues before (from memory), mention it.
+   - Repository-specific findings from search_codebase (broken callers,
+     duplicated logic, convention violations), with file:line references.
 
 At the end of every review:
-5. Call save_memory with:
+6. Call save_memory with:
    - file_reviewed: the filename or description
    - issues_found: list of key issues found
    - preference_notes: any observations about the user's coding style (optional)
@@ -65,16 +77,25 @@ Be concise but thorough. Personalize your feedback using past context when avail
 
 # ── Agent loop ────────────────────────────────────────────────────────────────
 
-def run_agent(user_input: str) -> str:
+MODEL = "gemini-2.5-flash"
+
+
+@observed
+def run_agent(user_input: str, session_id: str | None = None) -> str:
     """
     Runs the full agent loop for a single review request.
 
     Args:
         user_input: Either a code snippet (string) or a file path.
+        session_id: Optional session id. Used by the eval harness to tie all
+                    per-task reviews under a recognizable session in Langfuse.
 
     Returns:
         The final review as a string.
     """
+    if session_id:
+        set_session(session_id, tags=["single_agent", MODEL])
+
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("GEMINI_API_KEY not found. Copy .env.example to .env and add your key.")
@@ -83,31 +104,37 @@ def run_agent(user_input: str) -> str:
 
     config = types.GenerateContentConfig(
         system_instruction=SYSTEM_PROMPT,
-        tools=[run_python_code, read_file, load_memory, save_memory],
+        tools=[run_python_code, read_file, get_git_diff, load_memory, save_memory, search_codebase],
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
     )
 
-    chat = client.chats.create(model="gemini-2.5-flash", config=config)
+    chat = client.chats.create(model=MODEL, config=config)
 
-    # Send the user's first message
-    response = chat.send_message(user_input)
+    # First Gemini call — captured as a generation observation
+    with generation("gemini:agent:initial", model=MODEL, input={"user": user_input}) as g:
+        response = chat.send_message(user_input)
+        g.update(output=response.text or "(tool calls)", usage_details=gemini_usage(response))
 
     # ── The loop ──────────────────────────────────────────────────────────────
     max_iterations = 15  # bumped up slightly — memory calls add extra turns
 
-    for _ in range(max_iterations):
+    for turn in range(max_iterations):
 
         # If no function calls, the LLM is done → return the final review
         if not response.function_calls:
             if response.text:
                 return response.text
-            # Gemini finished tool calls but wrote no review — nudge it
-            followup = chat.send_message(
-                "Now write your complete structured review for the user based on everything you found."
-            )
+            with generation(
+                "gemini:agent:final-nudge", model=MODEL,
+                input={"nudge": "write the final structured review"},
+            ) as g:
+                followup = chat.send_message(
+                    "Now write your complete structured review for the user based on everything you found."
+                )
+                g.update(output=followup.text or "", usage_details=gemini_usage(followup))
             return followup.text or "(Agent completed but returned no text.)"
 
-        # Execute every tool call the LLM requested
+        # Execute every tool call the LLM requested (each tool is @observed)
         tool_results = []
         for fc in response.function_calls:
             tool_name = fc.name
@@ -116,7 +143,6 @@ def run_agent(user_input: str) -> str:
             print(f"\n  → Agent calling: {tool_name}({tool_args})")
             result = TOOL_REGISTRY[tool_name](**tool_args)
 
-            # Memory results can be long — truncate display only, not the actual result
             display = str(result)
             print(f"  ← Result: {display[:120]}{'...' if len(display) > 120 else ''}")
 
@@ -128,6 +154,11 @@ def run_agent(user_input: str) -> str:
             )
 
         # Send all results back to the LLM and get its next response
-        response = chat.send_message(tool_results)
+        with generation(
+            f"gemini:agent:turn-{turn + 1}", model=MODEL,
+            input={"tool_results_count": len(tool_results)},
+        ) as g:
+            response = chat.send_message(tool_results)
+            g.update(output=response.text or "(more tool calls)", usage_details=gemini_usage(response))
 
     return "Error: Agent exceeded maximum iterations without finishing."
